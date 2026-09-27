@@ -19,8 +19,11 @@ python3 -m radio2.check
 ```
 
 Vul de twee mappen en het jaarbereik in, klik op **Starten**. De rest gaat
-automatisch. Instellingen worden onthouden, dus de volke keer hoef je alleen de jaren
-aan te passen of meteen opnieuw te klikken.
+automatisch. Instellingen worden onthouden, dus de volgende keer hoef je alleen de
+jaren aan te passen of meteen opnieuw te klikken.
+
+Er staat nog een tweede programma in deze map, dat alleen de luidheid van je
+mp3's gelijktrekt: [Luidheid Normaliseren](#luidheid-gelijktrekken-loudnorm).
 
 ---
 
@@ -33,7 +36,8 @@ aan te passen of meteen opnieuw te klikken.
 5. [Bestanden in de WORKDIR](#bestanden-in-de-workdir)
 6. [Stoppen en herstarten](#stoppen-en-herstarten)
 7. [Veelvoorkomende problemen](#veelvoorkomende-problemen)
-8. [Projectstructuur](#projectstructuur)
+8. [Luidheid gelijktrekken](#luidheid-gelijktrekken-loudnorm)
+9. [Projectstructuur](#projectstructuur)
 
 ---
 
@@ -399,10 +403,104 @@ hernummerd.
 
 ---
 
+## Luidheid gelijktrekken (loudnorm)
+
+Er staat een tweede programma in deze map: **Luidheid Normaliseren**. Dat haalt
+de verschillen in volume uit een map mp3's weg, zodat je collectie overal even
+hard klinkt. De nummers blijven hetzelfde, alleen het volume wordt gelijkgetrokken.
+
+```bash
+./run-loudnorm.sh
+```
+
+Dat is alles wat nodig is: geen browser, geen YouTube, alleen ffmpeg.
+
+### Wat je ervoor nodig hebt
+
+Alleen Python 3.10+ met Tkinter en `ffmpeg`. De Python-pakketten van het
+Radio 2-programma zijn hier niet nodig. Controleer het met:
+
+```bash
+ffmpeg -version
+```
+
+### Zo werkt het
+
+1. **Kies de map** met de knop *Bladeren*. Alleen de bestanden in die map zelf
+   worden gebruikt; submappen worden overgeslagen.
+2. **Druk op Meten.** Het programma bepaalt van elk bestand de luidheid. Dat
+   kost even, maar er wordt nog niets gewijzigd. Je ziet daarna:
+   - het kleinste, grootste en gemiddelde niveau;
+   - de mediaan, en hoeveel LU het bereik is;
+   - een balkgrafiek met de verdeling, en waar het doelniveau ligt;
+   - hoeveel bestanden er al echt afgeknipt zijn (piek boven 0 dBFS);
+   - een schatting van hoe lang het normaliseren gaat duren.
+3. **Kies een doelniveau** en eventueel een andere bitrate. Bij elk niveau staat
+   wat de gevolgen zijn; bij -11 LUFS krijgen zachte nummers veel meer
+   versterking, en dus ook meer ruis.
+4. **Druk op Starten.** De bestanden worden eerst naar een aparte werkmap
+   geschreven, daarna gecontroleerd, en pas als alles goed is gaat de nieuwe
+   map de oude vervangen.
+
+De meting wordt onthouden in `~/.cache/loudnorm`. Tweede je op Meten voor
+dezelfde map, dan is dat meteen klaar.
+
+### Veiligheid
+
+- Er wordt **nooit over de oude map heen geschreven** terwijl er nog gewerkt
+  wordt. Het programma werkt in `Mapnaam_genormaliseerd`.
+- Na afloop volgt een controle: aantal bestanden, leesbaarheid en afwijkende
+  duur. Is er iets mis, dan blijft de oude map ongemoeid en krijg je een foutmelding.
+- Standaard staan de originelen daarna in `Mapnaam_origineel`. Die map is pas
+  veilig te verwijderen als je het resultaat hebt beluisterd.
+- De weergegeven meting wordt ongeldig zodra je de map wijzigt of de map
+  opnieuw laat beschrijven. Je moet dan opnieuw meten; anders zou je op
+  verouderde cijfers normaliseren.
+
+### De doelniveaus
+
+| Niveau | Wanneer |
+|---|---|
+| **-14 LUFS** | de standaard van YouTube en Spotify, en vrijwel altijd de mediaan van je collectie |
+| -13 LUFS | iets luider, nog gematigd |
+| -12 LUFS | ongeveer 2 dB luider dan de standaard |
+| **-11 LUFS** | duidelijk hoorbaar boven andere programma's; zachte nummers krijgen veel versterking en dus meer ruis |
+| -16 LUFS | de minste versterking nodig, dus de minste ruisversterking; je zet je volume verder op |
+
+### Waarom niet gewoon 192 kbit/s
+
+Een bestaand bestand hoger dan 192 kbit/s "ophogen" levert geen extra kwaliteit
+op: het codec-formaat bepaalt wat erin zit. Bij luidheid geldt hetzelfde. Daarom
+hercodeert dit programma alles naar 192 kbit/s en rekent het volume gelijk in
+dezelfde rondegang. Kies je *behouden*, dan blijft elk bestand op zijn eigen
+bitrate.
+
+### Pieken en de grens van 0 dBFS
+
+Een mp3 die te hard gaat, gaat niet alleen te hard, hij gaat ook vervormen. Het
+programme houdt daarom de piek onder -1 dBFS en komt nooit boven 0 dBFS. Heeft
+een nummer een piek die te dicht tegen dat plafond komt, dan wordt de versterking
+iets teruggedraaid. Dat betekent dat zo'n nummer dan op -17 LUFS uitkomt in
+plaats van -14, en dus stiller is dan de rest. Dat is een bewuste keuze: een
+korte vervorming is storender dan een iets stiller nummer.
+
+Is een nummer in het origineel al afgeknipt (piek boven 0 dBFS), dan is dat
+reparatie niet meer mogelijk; de schade zit al in het bestand. Het programma
+laat het dan zo rusten en houdt er geen nieuwe schade bovenop.
+
+### Stoppen
+
+Tijdens meten of normaliseren kun je op Stoppen drukken. Het lopende bestand
+wordt afgemaakt. Start je daarna opnieuw, dan gaat het verder waar je was:
+klaargezette bestanden in de werkmap worden hergebruikt en alleen de ontbrekende
+worden nog gemaakt.
+
+---
+
 ## Projectstructuur
 
 ```
-radio2/
+radio2/                 het Radio 2-programma
 ├── __main__.py     startpunt
 ├── check.py        installatiecontrole
 ├── gui.py          de GUI
@@ -415,6 +513,11 @@ radio2/
 ├── settings.py     instellingen onthouden tussen sessies
 ├── config.py       constanten en instellingen
 └── utils.py        bestandsnamen, normalisatie, prefixbreedte
+
+loudnorm/               het luidheidprogramma
+├── __main__.py     startpunt
+├── core.py         meten, normaliseren, controleren, omschrijven
+└── gui.py          de GUI
 ```
 
 ## Licentie
